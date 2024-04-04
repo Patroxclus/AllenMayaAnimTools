@@ -2,6 +2,12 @@ import maya.cmds as mc
 
 from PySide2.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
 
+def CreateBox(name, size):
+    pntPositions = p = ((-0.5,0.5,0.5), (0.5,0.5,0.5), (0.5,0.5,-0.5), (-0.5, 0.5, -0.5), (-0.5, 0.5, 0.5), (-0.5, -0.5, 0.5), (0.5, -0.5, 0.5), (0.5, 0.5, 0.5), (0.5, -0.5, 0.5), (0.5, -0.5, -0.5), (0.5, 0.5, -0.5), (0.5, -0.5, -0.5), (-0.5, -0.5, -0.5), (-0.5, 0.5, -0.5), (-0.5, -0.5, -0.5), (-0.5, -0.5, 0.5))
+    mc.curve(name = name, d=1, p = pntPositions)
+    mc.setAttr(name +".scale", size, size, size, type = "float3")
+    mc.makeIdentity(name, apply = True)  #this is freeze transform
+
 def CreateCircleController(jnt, size):
     name = "ac_" + jnt
     mc.circle(n = name, nr=(1,0,0), r = size/2)
@@ -9,7 +15,6 @@ def CreateCircleController(jnt, size):
     mc.group(name, n = ctrlGrpName)
     mc.matchTransform(ctrlGrpName, jnt)
     mc.orientConstraint(name, jnt)
-
     return name,ctrlGrpName
 
 
@@ -32,6 +37,17 @@ class CreateLimbControl:
 
         mc.parent(midCtrlGrp, rootCtrl)
         mc.parent(endCtrlGRP, midCtrl)
+
+        ikEndCtrl = "ac_ik_" + self.end
+        CreateBox(ikEndCtrl, 10)
+        ikEndCtrlGrp = ikEndCtrl + "_grp"
+        mc.group(ikEndCtrl, n = ikEndCtrlGrp)
+        mc.matchTransform(ikEndCtrlGrp, self.end)
+        mc.orientConstraint(ikEndCtrl, self.end)
+
+        ikHandleName = "ikHandle_" + self.end
+        mc.ikHandle(n=ikHandleName, sj = self.root, ee=self.end, sol="ikRPsolver")
+
 
 
 class CreateLimbControllerWidget(QWidget):
