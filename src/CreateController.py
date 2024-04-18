@@ -4,19 +4,10 @@ import maya.cmds as mc
 from PySide2.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
 
 def CreateBox(name, size):
-    pntPositions = ((-0.5,0.5,0.5), (0.5,0.5,0.5), (0.5,0.5,-0.5), (-0.5, 0.5, -0.5), (-0.5, 0.5, 0.5), (-0.5, -0.5, 0.5), (0.5, -0.5, 0.5), (0.5, 0.5, 0.5), (0.5, -0.5, 0.5), (0.5, -0.5, -0.5), (0.5, 0.5, -0.5), (0.5, -0.5, -0.5), (-0.5, -0.5, -0.5), (-0.5, 0.5, -0.5), (-0.5, -0.5, -0.5), (-0.5, -0.5, 0.5))
-    mc.curve(n = name, d=1, p = pntPositions)
-    mc.setAttr(name + ".scale", size, size, size, type = "float3")
-    mc.makeIdentity(name, apply = True) # this is freeze transformation
-
-def CreatePlus(name, size):
-    pntPositions = ((0.5,0,1),(0.5,0,0.5),(1,0,0.5),(1,0,-0.5),(0.5, 0,-0.5), (0.5, 0, -1),(-0.5, 0, -1),(-0.5,0,-0.5),(-1, 0, -0.5),(-1,0,0.5),(-0.5,0,0.5),(-0.5,0,1),(0.5,0,1))
-    mc.curve(n = name, d=1, p = pntPositions)
-    mc.setAttr(name + ".scale", size, size, size, type = "float3")
-    mc.makeIdentity(name, apply = True) # this is freeze transformation
-
-def SetChannelHidden(name, channel):
-    mc.setAttr(name + "." + channel, k=False, channelBox = False)
+    pntPositions = p = ((-0.5,0.5,0.5), (0.5,0.5,0.5), (0.5,0.5,-0.5), (-0.5, 0.5, -0.5), (-0.5, 0.5, 0.5), (-0.5, -0.5, 0.5), (0.5, -0.5, 0.5), (0.5, 0.5, 0.5), (0.5, -0.5, 0.5), (0.5, -0.5, -0.5), (0.5, 0.5, -0.5), (0.5, -0.5, -0.5), (-0.5, -0.5, -0.5), (-0.5, 0.5, -0.5), (-0.5, -0.5, -0.5), (-0.5, -0.5, 0.5))
+    mc.curve(name = name, d=1, p = pntPositions)
+    mc.setAttr(name +".scale", size, size, size, type = "float3")
+    mc.makeIdentity(name, apply = True)  #this is freeze transform
 
 def CreateCircleController(jnt, size):
     name = "ac_" + jnt
@@ -28,46 +19,7 @@ def CreateCircleController(jnt, size):
 
     return name, ctrlGrpName
 
-def GetObjPos(obj):
-    # q means we are querying
-    # t means we are querying the translate
-    # ws means we are querying in the world space
-    pos = mc.xform(obj, q=True, t=True, ws=True)
-    return Vector(pos[0], pos[1], pos[2])
 
-def SetObjPos(obj, pos):
-    mc.setAttr(obj + ".translate", pos.x, pos.y, pos.z, type = "float3")
-
-class Vector:
-    def __init__(self, x, y, z):
-        self.x = x
-        self.y = y
-        self.z = z
-
-    # this enables Vector + Vector
-    def __add__(self, other):
-        return Vector(self.x + other.x, self.y + other.y, self.z + other.z)
-    
-    #this enables Vector - Vector 
-    def __sub__(self, other):
-        return Vector(self.x - other.x, self.y - other.y, self.z - other.z)
-
-    #we are defining Vector * float
-    def __mul__(self, scalar):
-        return Vector(self.x * scalar, self.y * scalar, self.z * scalar)
-    
-    #we are defining vector / float
-    def __truediv__(self, scalar):
-        return Vector(self.x / scalar, self.y / scalar, self.z / scalar)
-
-    def GetLength(self):
-        return (self.x ** 2 + self.y ** 2 + self.z ** 2) ** 0.5 
-
-    def GetNormalized(self): 
-        return self/self.GetLength()
-
-    def __str__(self):
-        return f"<{self.x} {self.y} {self.z}>"
 
 class CreateLimbControl:
     def __init__(self):
@@ -98,68 +50,6 @@ class CreateLimbControl:
         ikHandleName = "ikHandle_" + self.end
         mc.ikHandle(n=ikHandleName, sj = self.root, ee=self.end, sol="ikRPsolver")
 
-        poleVector = mc.getAttr(ikHandleName+".poleVector")[0]
-        poleVector = Vector(poleVector[0], poleVector[1], poleVector[2])
-        poleVector = poleVector.GetNormalized()
-
-        rootPos = GetObjPos(self.root)
-        endPos = GetObjPos(self.end)
-
-        print(rootPos)
-        print(endPos)
-
-        rootToEndVec = endPos - rootPos
-        armHalfLength = rootToEndVec.GetLength()/2
-
-        poleVecPos = rootPos + rootToEndVec/2 + poleVector * armHalfLength
-        ikMidCtrl = "ac_ik_" + self.mid
-        mc.spaceLocator(n=ikMidCtrl) # make a locator with the name ac_ik_ + self.mid
-        ikMidCtrlGrp = ikMidCtrl + "_grp" # figure out the group name of that locator
-        mc.group(ikMidCtrl, n = ikMidCtrlGrp) #group the locator with the name
-        SetObjPos(ikMidCtrlGrp, poleVecPos) #make the locator to the polevector location we figured out
-        mc.poleVectorConstraint(ikMidCtrl, ikHandleName) #do pole vector constraint.
-        mc.parent(ikHandleName, ikEndCtrl)
-        mc.hide(ikHandleName)
-
-        ikfkBlendCtrl = "ac_" + self.root + "_ikfkBlend"
-        CreatePlus(ikfkBlendCtrl, 2)
-        ikfkBlendCtrlGrp = ikfkBlendCtrl + "_grp"
-        mc.group(ikfkBlendCtrl, n = ikfkBlendCtrlGrp)
-        ikfkBlendCtrlPos = rootPos + Vector(rootPos.x,0,0)
-        SetObjPos(ikfkBlendCtrlGrp, ikfkBlendCtrlPos)
-        mc.setAttr(ikfkBlendCtrlGrp+".rotateX", 90)
-
-        SetChannelHidden(ikfkBlendCtrl, 'tx')
-        SetChannelHidden(ikfkBlendCtrl, 'ty')
-        SetChannelHidden(ikfkBlendCtrl, 'tz')
-        SetChannelHidden(ikfkBlendCtrl, 'rx')
-        SetChannelHidden(ikfkBlendCtrl, 'ry')
-        SetChannelHidden(ikfkBlendCtrl, 'rz')
-        SetChannelHidden(ikfkBlendCtrl, 'sx')
-        SetChannelHidden(ikfkBlendCtrl, 'sy')
-        SetChannelHidden(ikfkBlendCtrl, 'sz')
-        SetChannelHidden(ikfkBlendCtrl, 'v')
-
-        ikfkBlendAttr = "ikfkBlend"
-        mc.addAttr(ikfkBlendCtrl, ln=ikfkBlendAttr, k=True, min = 0, max = 1)        
-        mc.connectAttr(ikfkBlendCtrl + "." + ikfkBlendAttr, ikHandleName + ".ikBlend")
-
-        reverseNode = "reverse_" + self.root + "_ikfkBlend"
-        mc.createNode("reverse", n = reverseNode)
-
-        #connect the blend for fkik switch 
-        mc.connectAttr(ikfkBlendCtrl + "." + ikfkBlendAttr, reverseNode+".inputX")
-        mc.connectAttr(reverseNode + ".outputX", endJntOrientConstraint + ".w0")
-        mc.connectAttr(ikfkBlendCtrl + "." + ikfkBlendAttr, endJntOrientConstraint+".w1")
-
-
-        mc.connectAttr(ikfkBlendCtrl + "." + ikfkBlendAttr, ikMidCtrlGrp + ".v")
-        mc.connectAttr(reverseNode + ".outputX", rootCtrl + ".v")
-        mc.connectAttr(ikfkBlendCtrl + "." + ikfkBlendAttr, ikEndCtrlGrp + ".v")
-
-        mc.group(ikfkBlendCtrlGrp, ikEndCtrlGrp, ikMidCtrlGrp, rootCtrlGrp, n = rootCtrlGrp + "_limb")
-
-        
 
 
 class CreateLimbControllerWidget(QWidget):
