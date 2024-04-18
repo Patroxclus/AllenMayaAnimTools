@@ -36,10 +36,18 @@ class Ghost:
             if mc.objExists(ghostName):
                 mc.delete(ghostName)
 
-            dup = mc.duplicate(srcMesh, n = ghostName)
+            dup = mc.duplicate(srcMesh, n=ghostName)
+            # Create the group if it doesn't exist
+            if not mc.objExists(self.ghostGrp):
+                mc.createNode("transform", n=self.ghostGrp)
+            # Parent the duplicate under the group
             mc.parent(ghostName, self.ghostGrp)
-            mc.addAttr(ghostName, ln = self.frameAttr, dv = currentFrame)
+            mc.addAttr(ghostName, ln=self.frameAttr, dv=currentFrame)
     
+    def DeleteAllGhosts(self):
+        if mc.objExists(self.ghostGrp):
+            mc.delete(mc.listRelatives(self.ghostGrp, c=True))
+
     def GoToNextGhost(self):
         frames = self.GetGhostFramesSorted()
         if not frames:
@@ -53,8 +61,30 @@ class Ghost:
         
         mc.currentTime(frames[0], e=True)
 
+    def DeleteGhostOnFrame(self, frame):
+        # Get all ghosts
+        ghosts = mc.listRelatives(self.ghostGrp, c=True) or []
+
+        # Iterate over each ghost
+        for ghost in ghosts:
+            # Get the frame attribute value of the ghost
+            ghost_frame = mc.getAttr(ghost + "." + self.frameAttr)
+            # Check if the ghost is on the specified frame
+            if ghost_frame == frame:
+                # Delete the ghost
+                mc.delete(ghost)
+
     def GoToPrevGhost(self):
-        pass
+        frames = self.GetGhostFramesSorted()
+        if not frames:
+            return
+        currentFrame = GetCurrentFrame()
+        frames.reverse()
+        for frame in frames:
+            if frame < currentFrame:
+                mc.currentTime(frame, e=True)
+                return
+
 
     def GetGhostFramesSorted(self):
         frames = set()
@@ -74,17 +104,17 @@ class Ghost:
 
 class GhostWidget(QWidget):
     def __init__(self):
-        super().__init__() # needed to call if you are inheriting from a parent class. 
-        self.ghost = Ghost() #create a ghost to pass command to. 
+        super().__init__()
+        self.ghost = Ghost()
         self.setWindowTitle("Allen's Ghost")
-        self.masterLayout = QVBoxLayout() # creates vertical layout
-        self.setLayout(self.masterLayout) #tells the window to use the vertical layout created in the previous line
+        self.masterLayout = QVBoxLayout()
+        self.setLayout(self.masterLayout)
 
-        self.srcMechList = QListWidget() # creates a list to show "stuff".
-        self.srcMechList.setSelectionMode(QAbstractItemView.ExtendedSelection) #allow multi selection
+        self.srcMechList = QListWidget()
+        self.srcMechList.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.srcMechList.itemSelectionChanged.connect(self.SrcMeshSelectionChanged)
         self.srcMechList.addItems(self.ghost.srcMeshes)
-        self.masterLayout.addWidget(self.srcMechList) # this adds the list created previously to the layout. 
+        self.masterLayout.addWidget(self.srcMechList)
 
         addSrcMeshBtn = QPushButton("Add Source Mesh")
         addSrcMeshBtn.clicked.connect(self.AddSrcMeshBtnClicked)
@@ -98,19 +128,42 @@ class GhostWidget(QWidget):
         self.ctrlLayout.addWidget(addGhostBtn)
 
         prevGhostBtn = QPushButton("Prev")
+        prevGhostBtn.clicked.connect(self.ghost.GoToPrevGhost)
+        self.ctrlLayout.addWidget(prevGhostBtn)
 
+        nextGhostBtn = QPushButton("Next")
+        nextGhostBtn.clicked.connect(self.ghost.GoToNextGhost)
+        self.ctrlLayout.addWidget(nextGhostBtn)
 
-    def SrcMeshSelectionChanged (self):
+        self.deleteLayout = QHBoxLayout()  # Create a layout for delete buttons
+        self.masterLayout.addLayout(self.deleteLayout)  # Add delete layout to master layout
+
+        deleteGhostOnFrameBtn = QPushButton("Delete Ghost on Frame")
+        deleteGhostOnFrameBtn.clicked.connect(self.DeleteGhostOnFrameBtnClicked)
+        self.deleteLayout.addWidget(deleteGhostOnFrameBtn)
+
+        deleteAllGhostsBtn = QPushButton("Delete All Ghosts")
+        deleteAllGhostsBtn.clicked.connect(self.DeleteAllGhostsBtnClicked)
+        self.deleteLayout.addWidget(deleteAllGhostsBtn)
+
+    def SrcMeshSelectionChanged(self):
         mc.select(cl=True)
         for item in self.srcMechList.selectedItems():
-            mc.select(item.text(), add = True)
-    
+            mc.select(item.text(), add=True)
+
     def AddSrcMeshBtnClicked(self):
-        self.ghost.SetSelectedAsSrcMesh() # asks ghost to populate its srcMeshes with the current selection
-        self.srcMechList.clear() # this clears out list widget
+        self.ghost.SetSelectedAsSrcMesh()
+        self.srcMechList.clear()
         self.srcMechList.addItems(self.ghost.srcMeshes)
 
+    def DeleteGhostOnFrameBtnClicked(self):
+        # Get the current frame
+        currentFrame = GetCurrentFrame()
+        # Call the DeleteGhostOnFrame method of the Ghost object
+        self.ghost.DeleteGhostOnFrame(currentFrame)
 
+    def DeleteAllGhostsBtnClicked(self):
+        self.ghost.DeleteAllGhosts()
 
 ghostWidget = GhostWidget()
 ghostWidget.show()
