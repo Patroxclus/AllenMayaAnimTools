@@ -1,6 +1,6 @@
 import maya.cmds as mc
-from PySide2.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QListWidget, QAbstractButton, QAbstractItemView
-
+from PySide2.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QListWidget, QAbstractButton, QAbstractItemView, QColorDialog
+from PySide2.QtGui import QColor, QPainter, QBrush
 def GetCurrentFrame():
     return int(mc.currentTime(q=True))
 
@@ -29,6 +29,8 @@ class Ghost:
                 if mc.objectType(s) == "mesh" : #the object is a mesh
                     self.srcMeshes.add(selected) # add the mesh to our set
     
+
+
     def AddGhost(self):
         for srcMesh in self.srcMeshes:
             currentFrame = GetCurrentFrame()
@@ -43,10 +45,33 @@ class Ghost:
             # Parent the duplicate under the group
             mc.parent(ghostName, self.ghostGrp)
             mc.addAttr(ghostName, ln=self.frameAttr, dv=currentFrame)
+
+            matName = self.GetMaterialNameForGhost(ghostName) #figure out the name for the material
+            if not mc.objExists(matName):
+                mc.shadingNode("lambert", asShader= True, name = matName)
+            
+            sgName = self.GetShadingEngineForGhost(ghostName)
+            if not mc.objExists(sgName):
+                mc.sets(name = sgName, renderable = True, empty = True)
+
+            mc.connectAttr(matName + ".outColor", sgName + ".surfaceShader", force = True)
+            mc.sets(ghostName, edit=True, forceElement = sgName)
+
+
+    def GetMaterialNameForGhost(self, ghost):
+        return ghost + "_mat"
+
+
+    def GetShadingEngineForGhost(self, ghost):
+        return ghost + "_sg"
     
+    
+                           
     def DeleteAllGhosts(self):
         if mc.objExists(self.ghostGrp):
-            mc.delete(mc.listRelatives(self.ghostGrp, c=True))
+            ghosts = mc.listRelatives(self.ghostGrp, c=True) or []
+            for ghost in ghosts:
+                self.DeleteGhost(ghost)
 
     def GoToNextGhost(self):
         frames = self.GetGhostFramesSorted()
@@ -62,17 +87,23 @@ class Ghost:
         mc.currentTime(frames[0], e=True)
 
     def DeleteGhostOnFrame(self, frame):
-        # Get all ghosts
         ghosts = mc.listRelatives(self.ghostGrp, c=True) or []
-
-        # Iterate over each ghost
         for ghost in ghosts:
-            # Get the frame attribute value of the ghost
             ghost_frame = mc.getAttr(ghost + "." + self.frameAttr)
-            # Check if the ghost is on the specified frame
             if ghost_frame == frame:
-                # Delete the ghost
-                mc.delete(ghost)
+                self.DeleteGhost(ghost)
+
+    def DeleteGhost(self, ghost):
+        mat = self.GetMaterialNameForGhost(ghost)
+        if mc.objExists(mat):
+            mc.delete(mat)
+        sg = self.GetShadingEngineForGhost(ghost)
+        if mc.objExists(sg):
+            mc.delete(sg)
+
+        if mc.objExists(ghost):
+            mc.delete(ghost)
+
 
     def GoToPrevGhost(self):
         frames = self.GetGhostFramesSorted()
@@ -100,6 +131,21 @@ class Ghost:
         frames.sort()
         return frames
 
+class ColorPicker(QWidget):
+    def __init__(self, width = 80, height = 20):
+        super().__init__()
+        self.setFixedSize(width, height)
+        self.color = QColor()
+
+    def mousePressEvent(self, event):
+        color = QColorDialog().getcolor(self.color)
+        self.color = color
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setBrush(QBrush(self.color))
+        painter.drawRect(0,0,self.wdith(), self.height())
 
 
 class GhostWidget(QWidget):
@@ -145,6 +191,9 @@ class GhostWidget(QWidget):
         deleteAllGhostsBtn = QPushButton("Delete All Ghosts")
         deleteAllGhostsBtn.clicked.connect(self.DeleteAllGhostsBtnClicked)
         self.deleteLayout.addWidget(deleteAllGhostsBtn)
+
+        colorPicker = ColorPicker()
+        self.masterLayout.addWidget(colorPicker)
 
     def SrcMeshSelectionChanged(self):
         mc.select(cl=True)
